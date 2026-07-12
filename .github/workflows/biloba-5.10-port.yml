@@ -216,7 +216,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "Devam eden workflow'lar icin artifact'lar yuklenecek."
 
-      - name: "Artifact'lari Paketle"
+        - name: "Artifact'lari Paketle"
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
           cd ${{ github.workspace }}/linux-stable/out/arch/arm64/boot
@@ -234,13 +234,13 @@ jobs:
           cp ${{ github.workspace }}/build.log ${{ github.workspace }}/artifacts/ 2>/dev/null
           
           # Build info
-          cat > ${{ github.workspace }}/artifacts/BUILD_INFO.txt << EOF
-BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-KERNEL_VERSION=${{ inputs.kernel_version }}
-TOOLCHAIN=${{ env.TOOLCHAIN_NAME }}
-BILOBA_COMMIT=$(cat ${{ github.workspace }}/device-files/MANIFEST.txt | grep "Commit:" | cut -d' ' -f2)
-BUILD_STATUS=${{ steps.build.outcome }}
-EOF
+          cat << 'EOF' > ${{ github.workspace }}/artifacts/BUILD_INFO.txt
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          KERNEL_VERSION=${{ inputs.kernel_version }}
+          TOOLCHAIN=${{ env.TOOLCHAIN_NAME }}
+          BILOBA_COMMIT=$(cat ${{ github.workspace }}/device-files/MANIFEST.txt | grep "Commit:" | cut -d' ' -f2)
+          BUILD_STATUS=${{ steps.build.outcome }}
+          EOF
           
           echo "=== Artifact Icerigi ==="
           ls -lah ${{ github.workspace }}/artifacts/
