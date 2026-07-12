@@ -112,11 +112,17 @@ jobs:
             mkdir -p ${{ github.workspace }}/toolchain/clang
             cd ${{ github.workspace }}/toolchain
             
-            echo "Clang indiriliyor..."
-            wget -qO clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz"
-            
-            echo "Clang cikariliyor..."
-            tar -xzf clang.tar.gz -C clang/
+            echo "AOSP Clang (r487747c) Google sunucularindan indiriliyor..."
+            # main yerine master kullanildi.
+            if wget -qO clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r487747c.tar.gz"; then
+              echo "AOSP Clang basariyla indirildi, cikariliyor..."
+              tar -xzf clang.tar.gz -C clang/
+              echo "TOOLCHAIN_NAME=clang-r487747c" >> $GITHUB_ENV
+            else
+              echo "Uyari: Google sunucusu yanit vermedi. Yedek Kernel Toolchain (Proton Clang) klonlaniliyor..."
+              git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+              echo "TOOLCHAIN_NAME=proton-clang" >> $GITHUB_ENV
+            fi
             
             CLANG_BIN="${{ github.workspace }}/toolchain/clang/bin"
             echo "PATH=${CLANG_BIN}:${PATH}" >> $GITHUB_ENV
@@ -128,7 +134,6 @@ jobs:
             echo "OBJDUMP=llvm-objdump" >> $GITHUB_ENV
             echo "STRIP=llvm-strip" >> $GITHUB_ENV
             echo "LD=ld.lld" >> $GITHUB_ENV
-            echo "TOOLCHAIN_NAME=clang-r487747c" >> $GITHUB_ENV
           fi
 
       - name: "ccache Cache"
