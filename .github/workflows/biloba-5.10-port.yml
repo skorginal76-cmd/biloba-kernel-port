@@ -46,7 +46,11 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq git bc bison build-essential ccache \
             curl flex libssl-dev libncurses-dev python3 wget xz-utils
-      - name: "Biloba-r-oss Checkout"
+
+      # EKSİK OLAN VE EKLENMESİ GEREKEN ADIM:
+      - name: "Repo Checkout (Kendi dosyalarimizi indir)"
+        uses: actions/checkout@v4
+
         run: |
           git clone --depth=1 --branch ${{ env.BILOBA_BRANCH }} \
             ${{ env.BILOBA_REPO }} ${{ github.workspace }}/biloba-oss
