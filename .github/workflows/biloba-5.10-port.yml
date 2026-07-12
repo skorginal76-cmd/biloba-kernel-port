@@ -216,7 +216,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "Devam eden workflow'lar icin artifact'lar yuklenecek."
 
-        - name: "Artifact'lari Paketle"
+      - name: "Artifact'lari Paketle"
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
           cd ${{ github.workspace }}/linux-stable/out/arch/arm64/boot
