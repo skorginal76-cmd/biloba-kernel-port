@@ -109,23 +109,16 @@ jobs:
             echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
             echo "TOOLCHAIN_NAME=gcc" >> $GITHUB_ENV
           else
-            CLANG_VERSION="r487747c"
-            CLANG_TAR="clang-${CLANG_VERSION}.tar.xz"
-            mkdir -p ${{ github.workspace }}/toolchain
+            mkdir -p ${{ github.workspace }}/toolchain/clang
             cd ${{ github.workspace }}/toolchain
-            wget -q --show-progress \
-              "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/${CLANG_TAR}" \
-              -O ${CLANG_TAR} || \
-            wget -q --show-progress \
-              "https://github.com/nibaji/android_prebuilts_clang_host_linux-x86_clang-${CLANG_VERSION}/archive/refs/heads/main.tar.gz" \
-              -O clang.tar.gz
-            if [ -f ${CLANG_TAR} ]; then
-              tar -xf ${CLANG_TAR}
-            elif [ -f clang.tar.gz ]; then
-              tar -xzf clang.tar.gz
-              mv android_prebuilts_clang_host_linux-x86_clang-${CLANG_VERSION}-main clang-${CLANG_VERSION}
-            fi
-            CLANG_BIN=$(find ${{ github.workspace }}/toolchain -name "clang" -type f | head -1 | xargs dirname)
+            
+            echo "Clang indiriliyor..."
+            wget -qO clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz"
+            
+            echo "Clang cikariliyor..."
+            tar -xzf clang.tar.gz -C clang/
+            
+            CLANG_BIN="${{ github.workspace }}/toolchain/clang/bin"
             echo "PATH=${CLANG_BIN}:${PATH}" >> $GITHUB_ENV
             echo "CC=clang" >> $GITHUB_ENV
             echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
@@ -135,8 +128,9 @@ jobs:
             echo "OBJDUMP=llvm-objdump" >> $GITHUB_ENV
             echo "STRIP=llvm-strip" >> $GITHUB_ENV
             echo "LD=ld.lld" >> $GITHUB_ENV
-            echo "TOOLCHAIN_NAME=clang-${CLANG_VERSION}" >> $GITHUB_ENV
+            echo "TOOLCHAIN_NAME=clang-r487747c" >> $GITHUB_ENV
           fi
+
       - name: "ccache Cache"
         uses: actions/cache@v4
         with:
