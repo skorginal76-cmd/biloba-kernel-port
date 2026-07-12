@@ -51,6 +51,7 @@ jobs:
       - name: "Repo Checkout (Kendi dosyalarimizi indir)"
         uses: actions/checkout@v4
 
+      - name: "Biloba-r-oss Checkout"
         run: |
           git clone --depth=1 --branch ${{ env.BILOBA_BRANCH }} \
             ${{ env.BILOBA_REPO }} ${{ github.workspace }}/biloba-oss
