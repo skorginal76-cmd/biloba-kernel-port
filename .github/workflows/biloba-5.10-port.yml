@@ -1,4 +1,4 @@
-Name: "Biloba Kernel 5.10.257 Port"
+name: "Biloba Kernel 5.10.257 Port"
 
 on:
   workflow_dispatch:
