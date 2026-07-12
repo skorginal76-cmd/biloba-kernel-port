@@ -205,7 +205,7 @@ jobs:
               -j$(nproc --all) 2>&1 | tee ${{ github.workspace }}/build.log
           fi
         continue-on-error: true
-
+        
       - name: "Build Analizi (Hata Varsa)"
         if: steps.build.outcome == 'failure'
         run: |
