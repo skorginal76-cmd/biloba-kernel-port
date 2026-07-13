@@ -111,4 +111,16 @@ if [ -f "$PLATFORM_KCONFIG" ] && ! grep -q "ARCH_MEDIATEK" "$PLATFORM_KCONFIG" 2
     # (5.10'da genelde var ama tam olsun)
 fi
 
+# === Kconfig 5.10 Syntax Fix ===
+echo "=== Kconfig Syntax Duzeltme ==="
+find drivers/misc/mediatek -name "Kconfig" -type f -exec \
+    perl -pi -e 's/^([\t ]*)---help---([\t ]*)$/\1help\2/' {} +
+
+# usb20 duplicate prompt fix
+sed -i '/depends on USB || USB_GADGET/{n;/^[[:space:]]*prompt/d}' \
+    drivers/misc/mediatek/usb20/Kconfig 2>/dev/null || true
+
+echo "=== Kconfig Duzeltme Tamamlandi ==="
+
+
 log "Entegrasyon tamamlandi!"
