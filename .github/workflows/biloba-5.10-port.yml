@@ -47,8 +47,7 @@ jobs:
           sudo apt-get install -y -qq git bc bison build-essential ccache \
             curl flex libssl-dev libncurses-dev python3 wget xz-utils
 
-      # EKSİK OLAN VE EKLENMESİ GEREKEN ADIM:
-      - name: "Repo Checkout (Kendi dosyalarimizi indir)"
+      - name: "Repo Checkout (Workflow Dosyalari)"
         uses: actions/checkout@v4
 
       - name: "Biloba-r-oss Checkout"
@@ -56,12 +55,14 @@ jobs:
           git clone --depth=1 --branch ${{ env.BILOBA_BRANCH }} \
             ${{ env.BILOBA_REPO }} ${{ github.workspace }}/biloba-oss
           echo "BILOBA_PATH=${{ github.workspace }}/biloba-oss" >> $GITHUB_ENV
+
       - name: "Cihaza Ozel Dosyalari Cikar"
         run: |
           mkdir -p ${{ github.workspace }}/device-files
           bash ${{ github.workspace }}/scripts/01-extract-device-files.sh \
             ${{ github.workspace }}/biloba-oss \
             ${{ github.workspace }}/device-files
+
       - name: "Dosya Manifesti Olustur"
         run: |
           echo "=== Cikarilan Dosyalar ===" > ${{ github.workspace }}/device-files/MANIFEST.txt
@@ -71,6 +72,7 @@ jobs:
           echo "" >> ${{ github.workspace }}/device-files/MANIFEST.txt
           find ${{ github.workspace }}/device-files -type f | sort >> ${{ github.workspace }}/device-files/MANIFEST.txt
           echo "Toplam: $(find ${{ github.workspace }}/device-files -type f | wc -l) dosya"
+
       - name: "Device Files Artifact Upload"
         id: upload-device
         uses: actions/upload-artifact@v4
@@ -93,18 +95,20 @@ jobs:
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
+
       - name: "Bagimliliklari Yukle"
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             bc bison build-essential ccache curl flex git \
-            libssl-dev libncurses-dev libtinfo5 python3 python3-pip \
+            libssl-dev libncurses-dev libtinfo-dev python3 python3-pip \
             wget xz-utils zip unzip device-tree-compiler \
             llvm lld libclang-dev clang libelf-dev
+
       - name: "Toolchain Kurulumu"
         run: |
           if [ "${{ inputs.toolchain }}" = "gcc" ]; then
-            sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+            sudo apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
             echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
             echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
             echo "TOOLCHAIN_NAME=gcc" >> $GITHUB_ENV
@@ -143,6 +147,7 @@ jobs:
           key: ccache-${{ inputs.toolchain }}-${{ inputs.kernel_version }}-${{ github.run_id }}
           restore-keys: |
             ccache-${{ inputs.toolchain }}-${{ inputs.kernel_version }}-
+
       - name: "Repo Checkout (Workflow Dosyalari)"
         uses: actions/checkout@v4
         with:
@@ -152,32 +157,38 @@ jobs:
             configs/
             patches/
           sparse-checkout-cone-mode: false
+
       - name: "Linux 5.10.257 Stable Indir"
         run: |
           bash ${{ github.workspace }}/ci-repo/scripts/02-setup-linux-510.sh \
             "${{ inputs.kernel_version }}" \
             "${{ github.workspace }}/linux-stable"
+
       - name: "Cihaz Dosyalarini Indir"
         uses: actions/download-artifact@v4
         with:
           name: biloba-device-files
           path: ${{ github.workspace }}/device-files/
+
       - name: "Dosyalari 5.10'e Entegre Et"
         run: |
           bash ${{ github.workspace }}/ci-repo/scripts/03-integrate-files.sh \
             ${{ github.workspace }}/device-files \
             ${{ github.workspace }}/linux-stable
+
       - name: "Uyumluluk Patch'leri Uygula"
         run: |
           bash ${{ github.workspace }}/ci-repo/scripts/04-apply-patches.sh \
             ${{ github.workspace }}/linux-stable \
             ${{ github.workspace }}/ci-repo/patches
+
       - name: "Defconfig Uygula"
         run: |
           cd ${{ github.workspace }}/linux-stable
           cp ${{ github.workspace }}/ci-repo/configs/biloba_5.10_defconfig \
             arch/arm64/configs/biloba_defconfig
           make O=out ARCH=arm64 biloba_defconfig
+
       - name: "Kernel Derle"
         id: build
         run: |
@@ -190,6 +201,7 @@ jobs:
               -j$(nproc --all) 2>&1 | tee ${{ github.workspace }}/build.log
           fi
         continue-on-error: true
+
       - name: "Build Analizi (Hata Varsa)"
         if: steps.build.outcome == 'failure'
         run: |
@@ -199,6 +211,7 @@ jobs:
           tail -100 ${{ github.workspace }}/build.log >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "Devam eden workflow'lar icin artifact'lar yuklenecek."
+
       - name: "Artifact'lari Paketle"
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
@@ -217,22 +230,24 @@ jobs:
           cp ${{ github.workspace }}/build.log ${{ github.workspace }}/artifacts/ 2>/dev/null || true
           
           # Build info
-          cat << 'EOF' > ${{ github.workspace }}/artifacts/BUILD_INFO.txt
-          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          KERNEL_VERSION=${{ inputs.kernel_version }}
-          TOOLCHAIN=${{ env.TOOLCHAIN_NAME }}
-          BILOBA_COMMIT=$(cat ${{ github.workspace }}/device-files/MANIFEST.txt | grep "Commit:" | cut -d' ' -f2 2>/dev/null)
-          BUILD_STATUS=${{ steps.build.outcome }}
-          EOF
+          cat << EOF > ${{ github.workspace }}/artifacts/BUILD_INFO.txt
+BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+KERNEL_VERSION=${{ inputs.kernel_version }}
+TOOLCHAIN=${{ env.TOOLCHAIN_NAME }}
+BILOBA_COMMIT=$(cat ${{ github.workspace }}/device-files/MANIFEST.txt | grep "Commit:" | cut -d' ' -f2 2>/dev/null)
+BUILD_STATUS=${{ steps.build.outcome }}
+EOF
           
           echo "=== Artifact Icerigi ==="
           ls -lah ${{ github.workspace }}/artifacts/
+
       - name: "Artifact Upload"
         uses: actions/upload-artifact@v4
         with:
           name: biloba-kernel-510-${{ inputs.toolchain }}-${{ github.run_number }}
           path: ${{ github.workspace }}/artifacts/
           retention-days: 14
+
       - name: "Build Ozeti"
         run: |
           echo "### Biloba Kernel 5.10.257 Port Ozeti" >> $GITHUB_STEP_SUMMARY
