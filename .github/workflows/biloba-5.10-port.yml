@@ -94,14 +94,16 @@ jobs:
     needs: extract-device-files
     timeout-minutes: 240
     steps:
-      - name: "Build Alanini Genislet"
-        uses: easimon/maximize-build-space@master
+      - name: "Disk Alani Temizle"
+        uses: jlumbroso/free-disk-space@main
         with:
-          root-reserve-mb: 6144
-          swap-size-mb: 4096
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: "Bagimliliklari Yukle"
         run: |
