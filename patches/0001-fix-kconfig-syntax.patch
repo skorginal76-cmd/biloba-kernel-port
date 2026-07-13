@@ -1,0 +1,97 @@
+#!/bin/bash
+# patches/0001-fix-kconfig-syntax.patch
+# Fixes Kconfig syntax for Linux 5.10 compatibility
+# Apply: cd linux-stable && bash ../patches/0001-fix-kconfig-syntax.patch
+
+echo "=== Kconfig Syntax Duzeltme Basladi ==="
+
+# Fix 1: Replace ---help--- with help in ALL Kconfig files
+echo "[1/6] ---help--- -> help..."
+find drivers/misc/mediatek drivers/input/touchscreen -name "Kconfig" -type f | while read -r kconfig; do
+    if grep -q "---help---" "$kconfig" 2>/dev/null; then
+        count=$(grep -c "---help---" "$kconfig")
+        echo "  [$count] $kconfig"
+        perl -pi -e 's/^([\t ]*)---help---([\t ]*)$/\1help\2/' "$kconfig"
+    fi
+done
+
+# Fix 2: Remove duplicate prompt in usb20/Kconfig
+echo "[2/6] Duplicate prompt fix..."
+USB20_KCONFIG="drivers/misc/mediatek/usb20/Kconfig"
+if [ -f "$USB20_KCONFIG" ]; then
+    prompt_count=$(awk '
+        /config USB_MTK_HDRC/ { in_block=1; next }
+        /^config / && in_block { in_block=0 }
+        in_block && /^[\t ]*prompt/ { count++ }
+        END { print count+0 }
+    ' "$USB20_KCONFIG")
+
+    if [ "$prompt_count" -gt 1 ]; then
+        echo "  [FIX] $USB20_KCONFIG ($prompt_count -> 1)"
+        awk '
+            /config USB_MTK_HDRC/ { in_block=1; print; next }
+            /^config / && in_block { in_block=0 }
+            in_block && /^[\t ]*prompt[\t ]+"/ { 
+                if (!prompt_seen) { prompt_seen=1; print; next }
+                else { next }
+            }
+            { print }
+        ' "$USB20_KCONFIG" > "${USB20_KCONFIG}.tmp"
+        mv "${USB20_KCONFIG}.tmp" "$USB20_KCONFIG"
+    fi
+fi
+
+# Fix 3: Add missing newlines at end of Kconfig files
+echo "[3/6] Missing newlines..."
+find drivers/misc/mediatek drivers/input/touchscreen -name "Kconfig" -type f | while read -r kconfig; do
+    if [ -n "$(tail -c 1 "$kconfig")" ]; then
+        echo "  [FIX] $kconfig"
+        echo "" >> "$kconfig"
+    fi
+done
+
+# Fix 4: Create missing touchscreen Kconfig
+echo "[4/6] Touchscreen Kconfig..."
+TOUCHSCREEN_MTK="drivers/input/touchscreen/mediatek"
+if [ ! -d "$TOUCHSCREEN_MTK" ]; then
+    echo "  [CREATE] $TOUCHSCREEN_MTK/Kconfig"
+    mkdir -p "$TOUCHSCREEN_MTK"
+    cat > "$TOUCHSCREEN_MTK/Kconfig" << 'KCONFIG_EOF'
+# Mediatek Touchscreen Kconfig placeholder
+config TOUCHSCREEN_MTK
+	tristate "MediaTek Touchscreen"
+	depends on INPUT_TOUCHSCREEN
+	help
+	  Say Y here to enable MediaTek touchscreen support.
+KCONFIG_EOF
+fi
+
+# Fix 5: Add touchscreen include
+echo "[5/6] Touchscreen include..."
+if ! grep -q "mediatek/Kconfig" drivers/input/touchscreen/Kconfig 2>/dev/null; then
+    echo 'source "drivers/input/touchscreen/mediatek/Kconfig"' >> drivers/input/touchscreen/Kconfig
+fi
+
+# Fix 6: irrx choose -> choice
+echo "[6/6] irrx fix..."
+if [ -f "drivers/misc/mediatek/irrx/Kconfig" ]; then
+    sed -i 's/^choose$/choice/' drivers/misc/mediatek/irrx/Kconfig 2>/dev/null || true
+fi
+
+# Verification
+echo ""
+echo "=== Verification ==="
+REMAINING=$(grep -r "---help---" drivers/misc/mediatek/ --include="Kconfig" 2>/dev/null || true)
+if [ -n "$REMAINING" ]; then
+    echo "WARNING: Still has ---help---:"
+    echo "$REMAINING"
+else
+    echo "OK: All ---help--- fixed"
+fi
+
+if [ -f "$TOUCHSCREEN_MTK/Kconfig" ]; then
+    echo "OK: Touchscreen Kconfig created"
+fi
+
+echo ""
+echo "=== Kconfig Fix Complete ==="

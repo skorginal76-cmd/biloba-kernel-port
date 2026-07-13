@@ -44,8 +44,14 @@ jobs:
       - name: "Disk Alani Temizle"
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo rm -rf /usr/local/share/boost /usr/share/swift /usr/local/share/chromedriver-linux64
+          sudo rm -rf /opt/google/chrome /opt/microsoft/msedge /opt/firefox
+          sudo rm -rf /usr/local/julia* /usr/local/graalvm /usr/local/n /usr/local/heroku
+          sudo rm -rf /usr/local/share/powershell /usr/share/miniconda /usr/share/kotlinc
           sudo docker image prune --all --force 2>/dev/null || true
+          sudo docker system prune --all --force 2>/dev/null || true
           sudo apt-get clean
+          sudo apt-get autoremove -y
           df -h
 
       - name: "Depolari Yukle"
@@ -73,7 +79,7 @@ jobs:
       - name: "Dosya Manifesti Olustur"
         run: |
           echo "=== Cikarilan Dosyalar ===" > ${{ github.workspace }}/device-files/MANIFEST.txt
-          echo "Tarih: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> ${{ github.workspace }}/device-files/MANIFEST.txt
+          echo "Tarih: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> ${{ github.workspace }}/device-files/MANIFEST.txt
           echo "Kaynak: ${{ env.BILOBA_REPO }}@${{ env.BILOBA_BRANCH }}" >> ${{ github.workspace }}/device-files/MANIFEST.txt
           echo "Commit: $(cd ${{ github.workspace }}/biloba-oss && git rev-parse --short HEAD)" >> ${{ github.workspace }}/device-files/MANIFEST.txt
           echo "" >> ${{ github.workspace }}/device-files/MANIFEST.txt
@@ -95,15 +101,17 @@ jobs:
     timeout-minutes: 240
     steps:
       - name: "Disk Alani Temizle"
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo rm -rf /usr/local/share/boost /usr/share/swift /usr/local/share/chromedriver-linux64
+          sudo rm -rf /opt/google/chrome /opt/microsoft/msedge /opt/firefox
+          sudo rm -rf /usr/local/julia* /usr/local/graalvm /usr/local/n /usr/local/heroku
+          sudo rm -rf /usr/local/share/powershell /usr/share/miniconda /usr/share/kotlinc
+          sudo docker image prune --all --force 2>/dev/null || true
+          sudo docker system prune --all --force 2>/dev/null || true
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+          df -h
 
       - name: "Bagimliliklari Yukle"
         run: |
@@ -124,19 +132,18 @@ jobs:
           else
             mkdir -p ${{ github.workspace }}/toolchain/clang
             cd ${{ github.workspace }}/toolchain
-            
-            echo "AOSP Clang (r487747c) Google sunucularindan indiriliyor..."
-            # main yerine master kullanildi.
+
+            echo "AOSP Clang (r487747c) indiriliyor..."
             if wget -qO clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r487747c.tar.gz"; then
               echo "AOSP Clang basariyla indirildi, cikariliyor..."
               tar -xzf clang.tar.gz -C clang/
               echo "TOOLCHAIN_NAME=clang-r487747c" >> $GITHUB_ENV
             else
-              echo "Uyari: Google sunucusu yanit vermedi. Yedek Kernel Toolchain (Proton Clang) klonlaniliyor..."
+              echo "Yedek Proton Clang klonlaniliyor..."
               git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
               echo "TOOLCHAIN_NAME=proton-clang" >> $GITHUB_ENV
             fi
-            
+
             CLANG_BIN="${{ github.workspace }}/toolchain/clang/bin"
             echo "PATH=${CLANG_BIN}:${PATH}" >> $GITHUB_ENV
             echo "CC=clang" >> $GITHUB_ENV
@@ -174,7 +181,7 @@ jobs:
             "${{ inputs.kernel_version }}" \
             "${{ github.workspace }}/linux-stable"
 
-      - name: "Kaynak Agacini Temizle (mrproper)"
+      - name: "Kaynak Agacini Temizle"
         run: |
           cd ${{ github.workspace }}/linux-stable
           make ARCH=arm64 mrproper
@@ -191,6 +198,57 @@ jobs:
             ${{ github.workspace }}/device-files \
             ${{ github.workspace }}/linux-stable
 
+      - name: "Kconfig 5.10 Syntax Fix"
+        run: |
+          cd ${{ github.workspace }}/linux-stable
+          echo "=== Kconfig Syntax Duzeltme ==="
+
+          # 1. Tum ---help--- -> help
+          find drivers/misc/mediatek drivers/input/touchscreen -name "Kconfig" -type f -exec \
+            perl -pi -e 's/^([\t ]*)---help---([\t ]*)$/\1help\2/' {} + 2>/dev/null || true
+
+          # 2. Eksik touchscreen Kconfig
+          mkdir -p drivers/input/touchscreen/mediatek
+          cat > drivers/input/touchscreen/mediatek/Kconfig << 'KCONFIG_EOF'
+# Mediatek Touchscreen Kconfig placeholder
+config TOUCHSCREEN_MTK
+	tristate "MediaTek Touchscreen"
+	depends on INPUT_TOUCHSCREEN
+	help
+	  Say Y here to enable MediaTek touchscreen support.
+KCONFIG_EOF
+
+          # 3. Touchscreen Kconfig'e include ekle
+          if ! grep -q "mediatek/Kconfig" drivers/input/touchscreen/Kconfig 2>/dev/null; then
+            echo 'source "drivers/input/touchscreen/mediatek/Kconfig"' >> drivers/input/touchscreen/Kconfig
+          fi
+
+          # 4. irrx: choose -> choice
+          if [ -f "drivers/misc/mediatek/irrx/Kconfig" ]; then
+            sed -i 's/^choose$/choice/' drivers/misc/mediatek/irrx/Kconfig 2>/dev/null || true
+          fi
+
+          # 5. Eksik newline'lari ekle
+          find drivers/misc/mediatek drivers/input/touchscreen -name "Kconfig" -type f | while read -r kf; do
+            [ -n "$(tail -c 1 "$kf")" ] && echo "" >> "$kf"
+          done
+
+          # 6. Duplicate prompt fix (usb20)
+          if [ -f "drivers/misc/mediatek/usb20/Kconfig" ]; then
+            awk '
+              /config USB_MTK_HDRC/ { in_block=1; print; next }
+              /^config / && in_block { in_block=0 }
+              in_block && /^[\t ]*prompt[\t ]+"/ { 
+                if (!prompt_seen) { prompt_seen=1; print; next }
+                else { next }
+              }
+              { print }
+            ' drivers/misc/mediatek/usb20/Kconfig > /tmp/usb20_kconfig_fixed
+            mv /tmp/usb20_kconfig_fixed drivers/misc/mediatek/usb20/Kconfig
+          fi
+
+          echo "=== Kconfig Duzeltme Tamamlandi ==="
+
       - name: "Uyumluluk Patch'leri Uygula"
         run: |
           bash ${{ github.workspace }}/ci-repo/scripts/04-apply-patches.sh \
@@ -200,9 +258,23 @@ jobs:
       - name: "Defconfig Uygula"
         run: |
           cd ${{ github.workspace }}/linux-stable
-          cp ${{ github.workspace }}/ci-repo/configs/biloba_5.10_defconfig \
-            arch/arm64/configs/biloba_defconfig
-          make O=out ARCH=arm64 biloba_defconfig
+
+          # Temiz 5.10 defconfig olustur
+          make ARCH=arm64 defconfig
+
+          # Biloba config'ini merge et
+          if [ -f "${{ github.workspace }}/ci-repo/configs/biloba_5.10_defconfig" ]; then
+            grep -E '^(CONFIG_|# CONFIG_)' \
+              "${{ github.workspace }}/ci-repo/configs/biloba_5.10_defconfig" \
+              | sort -u > /tmp/biloba_clean.config
+
+            ./scripts/kconfig/merge_config.sh -m .config /tmp/biloba_clean.config || true
+          fi
+
+          make ARCH=arm64 olddefconfig
+
+          echo "=== Defconfig Ozeti ==="
+          grep -E "CONFIG_ARCH_MEDIATEK|CONFIG_LOCALVERSION|CONFIG_MTK_|CONFIG_ANDROID" .config | head -20
 
       - name: "Kernel Derle"
         id: build
@@ -225,31 +297,28 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           tail -100 ${{ github.workspace }}/build.log >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "Devam eden workflow'lar icin artifact'lar yuklenecek."
 
       - name: "Artifact'lari Paketle"
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
-          cd ${{ github.workspace }}/linux-stable/out/arch/arm64/boot
 
-          # Kernel Image
-          [ -f Image ] && cp Image ${{ github.workspace }}/artifacts/
-          [ -f Image.gz ] && cp Image.gz ${{ github.workspace }}/artifacts/
+          if [ -d "${{ github.workspace }}/linux-stable/out/arch/arm64/boot" ]; then
+            cd ${{ github.workspace }}/linux-stable/out/arch/arm64/boot
+            [ -f Image ] && cp Image ${{ github.workspace }}/artifacts/
+            [ -f Image.gz ] && cp Image.gz ${{ github.workspace }}/artifacts/
 
-          # DTB dosyalari
-          if [ -d dts/mediatek ]; then
-            find dts/mediatek -name "*.dtb" -exec cp {} ${{ github.workspace }}/artifacts/ \;
+            if [ -d dts/mediatek ]; then
+              find dts/mediatek -name "*.dtb" -exec cp {} ${{ github.workspace }}/artifacts/ \\;
+            fi
           fi
 
-          # Build log
           cp ${{ github.workspace }}/build.log ${{ github.workspace }}/artifacts/
 
-          # Build info
           printf '%s\n' \
             "BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
             "KERNEL_VERSION=${{ inputs.kernel_version }}" \
             "TOOLCHAIN=${{ env.TOOLCHAIN_NAME }}" \
-            "BILOBA_COMMIT=$(cat ${{ github.workspace }}/device-file)" \
+            "BILOBA_COMMIT=$(grep 'Commit:' ${{ github.workspace }}/device-files/MANIFEST.txt 2>/dev/null | cut -d' ' -f2 || echo 'unknown')" \
             "BUILD_STATUS=${{ steps.build.outcome }}" \
             > ${{ github.workspace }}/artifacts/build-info.txt
 
@@ -270,20 +339,20 @@ jobs:
           echo "- **Surum:** ${{ inputs.kernel_version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Toolchain:** ${{ env.TOOLCHAIN_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Hedef:** ${{ inputs.build_target }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tarih:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
-          
+          echo "- **Tarih:** $(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_STEP_SUMMARY
+
           if [ -f "${{ github.workspace }}/artifacts/Image.gz" ]; then
             echo "- **Image.gz:** ✅ $(ls -lh ${{ github.workspace }}/artifacts/Image.gz | awk '{print $5}')" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **Image.gz:** ❌ Bulunamadi" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           DTB_COUNT=$(find ${{ github.workspace }}/artifacts -name "*.dtb" | wc -l)
           echo "- **DTB sayisi:** ${DTB_COUNT}" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ "${{ steps.build.outcome }}" = "failure" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**⚠️ Derleme hatasi var. Asagidaki adimlar manuel mudahale gerektirebilir:**" >> $GITHUB_STEP_SUMMARY
+            echo "**⚠️ Derleme hatasi var.**" >> $GITHUB_STEP_SUMMARY
             echo "1. build.log'u indirip hata mesajini inceleyin" >> $GITHUB_STEP_SUMMARY
             echo "2. patches/ dizinine ilgili uyumluluk patch'ini ekleyin" >> $GITHUB_STEP_SUMMARY
             echo "3. Workflow'u tekrar calistirin" >> $GITHUB_STEP_SUMMARY
