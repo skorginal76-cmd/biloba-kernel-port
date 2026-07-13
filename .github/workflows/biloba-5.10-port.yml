@@ -169,9 +169,15 @@ jobs:
 
       - name: "Linux 5.10.257 Stable Indir"
         run: |
+          rm -rf ${{ github.workspace }}/linux-stable
           bash ${{ github.workspace }}/ci-repo/scripts/02-setup-linux-510.sh \
             "${{ inputs.kernel_version }}" \
             "${{ github.workspace }}/linux-stable"
+
+      - name: "Kaynak Agacini Temizle (mrproper)"
+        run: |
+          cd ${{ github.workspace }}/linux-stable
+          make ARCH=arm64 mrproper
 
       - name: "Cihaz Dosyalarini Indir"
         uses: actions/download-artifact@v4
