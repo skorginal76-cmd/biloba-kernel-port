@@ -41,6 +41,15 @@ jobs:
     outputs:
       device-files-tar: ${{ steps.upload-device.outputs.artifact-id }}
     steps:
+      - name: "Build Alanini Genislet"
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 6144
+          swap-size-mb: 4096
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
       - name: "Depolari Yukle"
         run: |
           sudo apt-get update -qq
