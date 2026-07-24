@@ -211,7 +211,7 @@ jobs:
           mkdir -p drivers/input/touchscreen/mediatek
           cat > drivers/input/touchscreen/mediatek/Kconfig << 'KCONFIG_EOF'
 # Mediatek Touchscreen Kconfig placeholder
-config TOUCHSCREEN_MTK
+    config TOUCHSCREEN_MTK
 	tristate "MediaTek Touchscreen"
 	depends on INPUT_TOUCHSCREEN
 	help
